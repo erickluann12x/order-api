@@ -39,6 +39,8 @@ public class WholesaleOrder {
 
     private Integer numeroCliente;
 
+    private String fotoUrl;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
