@@ -28,6 +28,7 @@ public class WholesaleOrder {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
     @Nullable
     private String nomeCliente;
     @Nullable
