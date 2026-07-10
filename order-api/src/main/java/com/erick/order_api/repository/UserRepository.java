@@ -1,8 +1,10 @@
 package com.erick.order_api.repository;
 
 import com.erick.order_api.entity.User;
+import com.erick.order_api.entity.WholesaleOrder;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
