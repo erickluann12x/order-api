@@ -13,12 +13,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/orders")
@@ -46,5 +48,15 @@ public class WholesaleController {
     @GetMapping("/number")
     public ResponseEntity<List<WholesaleResponseDTO>> findByNumber(@RequestParam String numeroCliente){
         return ResponseEntity.ok(wholesaleService.findByNumberClient(numeroCliente));
+    }
+
+    @GetMapping("/seller")
+    public ResponseEntity<List<WholesaleResponseDTO>> findBySeller(@RequestParam String nomeVendedor){
+        return ResponseEntity.ok(wholesaleService.findByNameSeller(nomeVendedor));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<WholesaleResponseDTO> findById(@PathVariable UUID id){
+        return  ResponseEntity.ok(wholesaleService.findById(id));
     }
 }
