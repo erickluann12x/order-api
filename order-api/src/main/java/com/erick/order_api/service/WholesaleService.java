@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -59,5 +60,19 @@ public class WholesaleService {
                 .map(mapper::ToResponse)
                 .toList();
 
+    }
+
+    public List<WholesaleResponseDTO> findByNameSeller(String nomeVendedor){
+        return wholesaleOrderRepository.findByNomeVendedor(nomeVendedor)
+                .stream()
+                .map(mapper::ToResponse)
+                .toList();
+    }
+
+    public WholesaleResponseDTO findById(UUID id){
+        WholesaleOrder order = wholesaleOrderRepository.findById(id)
+                .orElseThrow(()-> new OrderNotFoundException("Pedido não encontrado"));
+
+        return mapper.ToResponse(order);
     }
 }
