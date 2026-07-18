@@ -41,7 +41,7 @@ public class WholesaleOrder {
 
     private BigDecimal valorTotal;
 
-    private Integer numeroCliente;
+    private String numeroCliente;
 
     private String fotoUrl;
 

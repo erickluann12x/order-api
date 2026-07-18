@@ -4,6 +4,7 @@ import com.erick.order_api.dto.WholesaleRequestDTO;
 import com.erick.order_api.dto.WholesaleResponseDTO;
 import com.erick.order_api.entity.User;
 import com.erick.order_api.entity.WholesaleOrder;
+import com.erick.order_api.exception.OrderNotFoundException;
 import com.erick.order_api.mapper.WholesaleMapper;
 import com.erick.order_api.repository.WholesaleOrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,7 @@ public class WholesaleService {
     }
 
     public List<WholesaleResponseDTO> listOrders() {
-        return wholesaleOrderRepository.findAllByOrderByDataCriacaoDesc()
+        return wholesaleOrderRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(mapper::ToResponse)
                 .toList();
@@ -46,7 +47,7 @@ public class WholesaleService {
 
     public List<WholesaleResponseDTO> findByNameClient(String nomeCliente){
 
-        return wholesaleOrderRepository.findByNomeCliente(nomeCliente)
+        return wholesaleOrderRepository.findByNomeClienteContainingIgnoreCase(nomeCliente)
                 .stream()
                 .map(mapper::ToResponse)
                 .toList();
@@ -55,7 +56,7 @@ public class WholesaleService {
 
     public List<WholesaleResponseDTO> findByNumberClient(String numeroCliente){
 
-        return wholesaleOrderRepository.findByNomeCliente(numeroCliente)
+        return wholesaleOrderRepository.findByNumeroCliente(numeroCliente)
                 .stream()
                 .map(mapper::ToResponse)
                 .toList();
@@ -63,7 +64,7 @@ public class WholesaleService {
     }
 
     public List<WholesaleResponseDTO> findByNameSeller(String nomeVendedor){
-        return wholesaleOrderRepository.findByNomeVendedor(nomeVendedor)
+        return wholesaleOrderRepository.findByNomeVendedorContainingIgnoreCase(nomeVendedor)
                 .stream()
                 .map(mapper::ToResponse)
                 .toList();

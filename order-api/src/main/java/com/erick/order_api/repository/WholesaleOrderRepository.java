@@ -8,13 +8,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface WholesaleOrderRepository extends JpaRepository<WholesaleOrder, UUID> {
-    List<WholesaleOrder> findAllByOrderByDataCriacaoDesc();
+    List<WholesaleOrder> findAllByOrderByCreatedAtDesc();
 
-    List<WholesaleOrder> findByNomeCliente(String nomeCliente);
+    List<WholesaleOrder> findByNomeClienteContainingIgnoreCase(String nomeCliente);
 
     List<WholesaleOrder> findByNumeroCliente(String numeroCliente);
 
-    List<WholesaleOrder> findByNomeVendedor(String nomeVendedor);
+    List<WholesaleOrder> findByNomeVendedorContainingIgnoreCase(String nomeVendedor);
 
     Optional<WholesaleOrder> findById(UUID id);
 }

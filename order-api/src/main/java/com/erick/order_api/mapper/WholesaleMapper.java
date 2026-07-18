@@ -12,7 +12,8 @@ public class WholesaleMapper {
                 wholesaleOrder.getNomeVendedor(),
                 wholesaleOrder.getMarca(),
                 wholesaleOrder.getValorTotal(),
-                wholesaleOrder.getCreatedAt(),
-                wholesaleOrder.getFotoUrl());
+                wholesaleOrder.getNumeroCliente(),
+                wholesaleOrder.getFotoUrl(),
+                wholesaleOrder.getCreatedAt());
     }
 }

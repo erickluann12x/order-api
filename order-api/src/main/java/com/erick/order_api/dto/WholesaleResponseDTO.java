@@ -11,6 +11,8 @@ public record WholesaleResponseDTO(UUID id,
                                    String nomeVendedor,
                                    String marca,
                                    BigDecimal valorTotal,
-                                   LocalDateTime createdAt,
-                                   String fotoUrl) {
+                                   String numeroCliente,
+                                   String fotoUrl,
+                                   LocalDateTime createdAt)
+    {
 }
