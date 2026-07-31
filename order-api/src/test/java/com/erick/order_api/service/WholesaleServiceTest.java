@@ -217,4 +217,16 @@ class WholesaleServiceTest {
 
         verify(repository).findById(idInexistente);
     }
+    @Test
+    @DisplayName("deve deletar pedido e remover foto do S3")
+    void deveDeletarPedidoEFotoDoS3() {
+        when(repository.findById(orderId))
+                .thenReturn(Optional.of(order1));
+
+        wholesaleService.deleteOrder(orderId);
+
+        // verifica que deletou do S3 e do banco
+        verify(s3Service, times(1)).deleteFile(order1.getFotoUrl());
+        verify(repository, times(1)).delete(order1);
+    }
 }

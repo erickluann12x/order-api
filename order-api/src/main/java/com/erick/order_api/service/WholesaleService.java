@@ -76,4 +76,10 @@ public class WholesaleService {
 
         return mapper.ToResponse(order);
     }
+    public void deleteOrder(UUID id) {
+        WholesaleOrder order = wholesaleOrderRepository.findById(id)
+                .orElseThrow(() -> new OrderNotFoundException("Pedido não encontrado " + id));
+      s3Service.deleteFile(order.getFotoUrl());
+      wholesaleOrderRepository.delete(order);
+    }
 }
