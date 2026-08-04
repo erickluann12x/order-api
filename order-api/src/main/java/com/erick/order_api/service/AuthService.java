@@ -28,7 +28,7 @@ public class AuthService {
                 )
         );
 
-        String token = jwtUtil.buildToken(dto.username());
+        String token = jwtUtil.generateToken(dto.username());
 
         return new LoginResponseDTO(token);
     }
