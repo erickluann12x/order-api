@@ -1,5 +1,6 @@
 package com.erick.order_api.service;
 
+import com.erick.order_api.dto.PageResponse;
 import com.erick.order_api.dto.WholesaleRequestDTO;
 import com.erick.order_api.dto.WholesaleResponseDTO;
 import com.erick.order_api.entity.Roles;
@@ -14,6 +15,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
@@ -33,22 +39,39 @@ class WholesaleServiceTest {
     @Mock
     private S3Service s3Service;
 
-
     private WholesaleMapper mapper;
+
     private WholesaleService wholesaleService;
 
     private User userLog;
+
     private WholesaleOrder order1;
+
     private WholesaleOrder order2;
+
     private UUID orderId;
+
+    private Pageable pageable;
 
     @BeforeEach
     void setUp() {
 
         mapper = new WholesaleMapper();
 
+        wholesaleService = new WholesaleService(
+                repository,
+                s3Service,
+                mapper
+        );
 
-        wholesaleService = new WholesaleService(repository, s3Service, mapper);
+        pageable = PageRequest.of(
+                0,
+                12,
+                Sort.by(
+                        Sort.Direction.DESC,
+                        "createdAt"
+                )
+        );
 
         orderId = UUID.randomUUID();
 
@@ -64,9 +87,13 @@ class WholesaleServiceTest {
         order1.setNomeCliente("Maria Silva");
         order1.setNomeVendedor("João");
         order1.setMarca("Arezzo");
-        order1.setValorTotal(new BigDecimal("1500.00"));
+        order1.setValorTotal(
+                new BigDecimal("1500.00")
+        );
         order1.setNumeroCliente("85999990001");
-        order1.setFotoUrl("https://bucket.s3.amazonaws.com/pedidos/foto1.jpg");
+        order1.setFotoUrl(
+                "https://bucket.s3.amazonaws.com/pedidos/foto1.jpg"
+        );
         order1.setCreatedAt(LocalDateTime.now());
         order1.setUser(userLog);
 
@@ -75,158 +102,623 @@ class WholesaleServiceTest {
         order2.setNomeCliente("Ana Maria");
         order2.setNomeVendedor("Carlos");
         order2.setMarca("Schutz");
-        order2.setValorTotal(new BigDecimal("2500.00"));
+        order2.setValorTotal(
+                new BigDecimal("2500.00")
+        );
         order2.setNumeroCliente("85999990002");
-        order2.setFotoUrl("https://bucket.s3.amazonaws.com/pedidos/foto2.jpg");
-        order2.setCreatedAt(LocalDateTime.now().minusDays(1));
+        order2.setFotoUrl(
+                "https://bucket.s3.amazonaws.com/pedidos/foto2.jpg"
+        );
+        order2.setCreatedAt(
+                LocalDateTime.now().minusDays(1)
+        );
         order2.setUser(userLog);
     }
 
     @Test
-    @DisplayName("deve criar pedido com sucesso e retornar URL da foto")
+    @DisplayName(
+            "deve criar pedido com sucesso e retornar URL da foto"
+    )
     void createOrder() {
-        MockMultipartFile foto = new MockMultipartFile(
-                "foto", "foto.jpg", "image/jpeg", "conteudo".getBytes()
+
+        MockMultipartFile foto =
+                new MockMultipartFile(
+                        "foto",
+                        "foto.jpg",
+                        "image/jpeg",
+                        "conteudo".getBytes()
+                );
+
+        WholesaleRequestDTO dto =
+                new WholesaleRequestDTO(
+                        "Maria Silva",
+                        "João",
+                        "Arezzo",
+                        new BigDecimal("1500.00"),
+                        "85999990001",
+                        foto
+                );
+
+        when(
+                s3Service.uploadFile(foto)
+        ).thenReturn(
+                order1.getFotoUrl()
         );
 
-        WholesaleRequestDTO dto = new WholesaleRequestDTO(
-                "Maria Silva", "João", "Arezzo",
-                new BigDecimal("1500.00"), "85999990001", foto
-        );
+        when(
+                repository.save(
+                        any(WholesaleOrder.class)
+                )
+        ).thenReturn(order1);
 
-        when(s3Service.uploadFile(foto)).thenReturn(order1.getFotoUrl());
-        when(repository.save(any(WholesaleOrder.class))).thenReturn(order1);
-
-        WholesaleResponseDTO response = wholesaleService.createOrder(dto, userLog);
+        WholesaleResponseDTO response =
+                wholesaleService.createOrder(
+                        dto,
+                        userLog
+                );
 
         assertThat(response).isNotNull();
-        assertThat(response.nomeCliente()).isEqualTo("Maria Silva");
-        assertThat(response.numeroCliente()).isEqualTo("85999990001");
-        assertThat(response.fotoUrl()).contains("amazonaws.com");
 
-        verify(s3Service).uploadFile(foto);
-        verify(repository).save(any(WholesaleOrder.class));
+        assertThat(
+                response.nomeCliente()
+        ).isEqualTo("Maria Silva");
+
+        assertThat(
+                response.numeroCliente()
+        ).isEqualTo("85999990001");
+
+        assertThat(
+                response.fotoUrl()
+        ).contains("amazonaws.com");
+
+        verify(
+                s3Service
+        ).uploadFile(foto);
+
+        verify(
+                repository
+        ).save(
+                any(WholesaleOrder.class)
+        );
     }
 
     @Test
-    @DisplayName("deve listar todos os pedidos ordenados por data de criação")
+    @DisplayName(
+            "deve listar pedidos paginados ordenados por data"
+    )
     void listOrders() {
-        when(repository.findAllByOrderByCreatedAtDesc())
-                .thenReturn(List.of(order1, order2));
 
-        List<WholesaleResponseDTO> list = wholesaleService.listOrders();
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1, order2),
+                        pageable,
+                        2
+                );
 
-        assertThat(list).hasSize(2);
-        assertThat(list.get(0).nomeCliente()).isEqualTo("Maria Silva");
-        assertThat(list.get(1).nomeCliente()).isEqualTo("Ana Maria");
+        when(
+                repository.findAll(pageable)
+        ).thenReturn(ordersPage);
 
-        verify(repository).findAllByOrderByCreatedAtDesc();
-    }
-
-    @Test
-    @DisplayName("deve buscar pedidos pelo nome do cliente ignorando maiúsculas")
-    void findByNameClient() {
-        when(repository.findByNomeClienteContainingIgnoreCase("maria"))
-                .thenReturn(List.of(order1, order2));
-
-        List<WholesaleResponseDTO> list = wholesaleService.findByNameClient("maria");
-
-        assertThat(list).hasSize(2);
-        assertThat(list).allMatch(p -> p.nomeCliente().toLowerCase().contains("maria"));
-
-        verify(repository).findByNomeClienteContainingIgnoreCase("maria");
-    }
-
-    @Test
-    @DisplayName("deve retornar lista vazia quando nome do cliente não existe")
-    void findByNameClient_WhenDoesNotExist() {
-        when(repository.findByNomeClienteContainingIgnoreCase("inexistente"))
-                .thenReturn(Collections.emptyList());
-
-        List<WholesaleResponseDTO> list = wholesaleService.findByNameClient("inexistente");
-
-        assertThat(list).isEmpty();
-        verify(repository).findByNomeClienteContainingIgnoreCase("inexistente");
-    }
-
-    @Test
-    @DisplayName("deve buscar pedidos pelo número do cliente")
-    void findByNumberClient() {
-        when(repository.findByNumeroCliente("85999990001"))
-                .thenReturn(List.of(order1));
-
-        List<WholesaleResponseDTO> list = wholesaleService.findByNumberClient("85999990001");
-
-        assertThat(list).hasSize(1);
-        assertThat(list.get(0).numeroCliente()).isEqualTo("85999990001");
-
-        verify(repository).findByNumeroCliente("85999990001");
-    }
-
-    @Test
-    @DisplayName("deve retornar lista vazia quando número do cliente não existe")
-    void findByNumberClient_WhenDoesNotExist() {
-        when(repository.findByNumeroCliente("00000000000"))
-                .thenReturn(Collections.emptyList());
-
-        List<WholesaleResponseDTO> list = wholesaleService.findByNumberClient("00000000000");
-
-        assertThat(list).isEmpty();
-        verify(repository).findByNumeroCliente("00000000000");
-    }
-
-    @Test
-    @DisplayName("deve buscar pedidos pelo nome do vendedor ignorando maiúsculas")
-    void findByNameSeller() {
-        when(repository.findByNomeVendedorContainingIgnoreCase("joão"))
-                .thenReturn(List.of(order1));
-
-        List<WholesaleResponseDTO> list = wholesaleService.findByNameSeller("joão");
-
-        assertThat(list).hasSize(1);
-        assertThat(list.get(0).nomeVendedor()).isEqualTo("João");
-
-        verify(repository).findByNomeVendedorContainingIgnoreCase("joão");
-    }
-
-    @Test
-    @DisplayName("deve buscar pedido por id com sucesso")
-    void findById() {
-        when(repository.findById(orderId)).thenReturn(Optional.of(order1));
-
-        WholesaleResponseDTO response = wholesaleService.findById(orderId);
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.listOrders(pageable);
 
         assertThat(response).isNotNull();
-        assertThat(response.id()).isEqualTo(orderId);
-        assertThat(response.nomeCliente()).isEqualTo("Maria Silva");
-        assertThat(response.numeroCliente()).isEqualTo("85999990001");
 
-        verify(repository).findById(orderId);
+        assertThat(
+                response.getContent()
+        ).hasSize(2);
+
+        assertThat(
+                response.getContent()
+                        .get(0)
+                        .nomeCliente()
+        ).isEqualTo("Maria Silva");
+
+        assertThat(
+                response.getContent()
+                        .get(1)
+                        .nomeCliente()
+        ).isEqualTo("Ana Maria");
+
+        assertThat(
+                response.getPage()
+        ).isZero();
+
+        assertThat(
+                response.getSize()
+        ).isEqualTo(12);
+
+        assertThat(
+                response.getTotalElements()
+        ).isEqualTo(2);
+
+        assertThat(
+                response.getTotalPages()
+        ).isEqualTo(1);
+
+        assertThat(
+                response.isFirst()
+        ).isTrue();
+
+        assertThat(
+                response.isLast()
+        ).isTrue();
+
+        verify(
+                repository
+        ).findAll(pageable);
     }
 
     @Test
-    @DisplayName("deve lançar exceção quando pedido não encontrado por id")
+    @DisplayName(
+            "deve buscar pedidos pelo nome do cliente de forma paginada"
+    )
+    void findByNameClient() {
+
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1, order2),
+                        pageable,
+                        2
+                );
+
+        when(
+                repository
+                        .findByNomeClienteContainingIgnoreCase(
+                                "maria",
+                                pageable
+                        )
+        ).thenReturn(ordersPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNameClient(
+                        "maria",
+                        pageable
+                );
+
+        assertThat(response).isNotNull();
+
+        assertThat(
+                response.getContent()
+        ).hasSize(2);
+
+        assertThat(
+                response.getContent()
+        ).allMatch(
+                order ->
+                        order.nomeCliente()
+                                .toLowerCase()
+                                .contains("maria")
+        );
+
+        assertThat(
+                response.getTotalElements()
+        ).isEqualTo(2);
+
+        verify(
+                repository
+        ).findByNomeClienteContainingIgnoreCase(
+                "maria",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve remover espaços do nome antes de pesquisar cliente"
+    )
+    void findByNameClient_ShouldTrimValue() {
+
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1),
+                        pageable,
+                        1
+                );
+
+        when(
+                repository
+                        .findByNomeClienteContainingIgnoreCase(
+                                "Maria",
+                                pageable
+                        )
+        ).thenReturn(ordersPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNameClient(
+                        "  Maria  ",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).hasSize(1);
+
+        verify(
+                repository
+        ).findByNomeClienteContainingIgnoreCase(
+                "Maria",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve retornar página vazia quando cliente não existe"
+    )
+    void findByNameClient_WhenDoesNotExist() {
+
+        Page<WholesaleOrder> emptyPage =
+                Page.empty(pageable);
+
+        when(
+                repository
+                        .findByNomeClienteContainingIgnoreCase(
+                                "inexistente",
+                                pageable
+                        )
+        ).thenReturn(emptyPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNameClient(
+                        "inexistente",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).isEmpty();
+
+        assertThat(
+                response.getTotalElements()
+        ).isZero();
+
+        assertThat(
+                response.getTotalPages()
+        ).isZero();
+
+        verify(
+                repository
+        ).findByNomeClienteContainingIgnoreCase(
+                "inexistente",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve buscar pedidos pelo número do cliente"
+    )
+    void findByNumberClient() {
+
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1),
+                        pageable,
+                        1
+                );
+
+        when(
+                repository.findByNumeroClienteContainingIgnoreCase(
+                        "85999990001",
+                        pageable
+                )
+        ).thenReturn(ordersPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNumberClient(
+                        "85999990001",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).hasSize(1);
+
+        assertThat(
+                response.getContent()
+                        .get(0)
+                        .numeroCliente()
+        ).isEqualTo("85999990001");
+
+        assertThat(
+                response.getTotalElements()
+        ).isEqualTo(1);
+
+        verify(
+                repository
+        ).findByNumeroClienteContainingIgnoreCase(
+                "85999990001",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve remover formatação do número antes de pesquisar"
+    )
+    void findByNumberClient_ShouldRemoveFormatting() {
+
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1),
+                        pageable,
+                        1
+                );
+
+        when(
+                repository.findByNumeroClienteContainingIgnoreCase(
+                        "85999990001",
+                        pageable
+                )
+        ).thenReturn(ordersPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNumberClient(
+                        "(85) 99999-0001",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).hasSize(1);
+
+        verify(
+                repository
+        ).findByNumeroClienteContainingIgnoreCase(
+                "85999990001",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve retornar página vazia quando número não existe"
+    )
+    void findByNumberClient_WhenDoesNotExist() {
+
+        Page<WholesaleOrder> emptyPage =
+                Page.empty(pageable);
+
+        when(
+                repository.findByNumeroClienteContainingIgnoreCase(
+                        "00000000000",
+                        pageable
+                )
+        ).thenReturn(emptyPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNumberClient(
+                        "00000000000",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).isEmpty();
+
+        assertThat(
+                response.getTotalElements()
+        ).isZero();
+
+        verify(
+                repository
+        ).findByNumeroClienteContainingIgnoreCase(
+                "00000000000",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve lançar exceção quando número não possui 11 dígitos"
+    )
+    void findByNumberClient_WhenNumberIsInvalid() {
+
+        assertThatThrownBy(
+                () ->
+                        wholesaleService
+                                .findByNumberClient(
+                                        "8599999",
+                                        pageable
+                                )
+        )
+                .isInstanceOf(
+                        IllegalArgumentException.class
+                )
+                .hasMessageContaining(
+                        "11 dígitos"
+                );
+    }
+
+    @Test
+    @DisplayName(
+            "deve buscar pedidos pelo nome do vendedor"
+    )
+    void findByNameSeller() {
+
+        Page<WholesaleOrder> ordersPage =
+                new PageImpl<>(
+                        List.of(order1),
+                        pageable,
+                        1
+                );
+
+        when(
+                repository
+                        .findByNomeVendedorContainingIgnoreCase(
+                                "joão",
+                                pageable
+                        )
+        ).thenReturn(ordersPage);
+
+        PageResponse<WholesaleResponseDTO> response =
+                wholesaleService.findByNameSeller(
+                        "joão",
+                        pageable
+                );
+
+        assertThat(
+                response.getContent()
+        ).hasSize(1);
+
+        assertThat(
+                response.getContent()
+                        .get(0)
+                        .nomeVendedor()
+        ).isEqualTo("João");
+
+        verify(
+                repository
+        ).findByNomeVendedorContainingIgnoreCase(
+                "joão",
+                pageable
+        );
+    }
+
+    @Test
+    @DisplayName(
+            "deve lançar exceção quando termo da pesquisa estiver vazio"
+    )
+    void findByNameClient_WhenNameIsBlank() {
+
+        assertThatThrownBy(
+                () ->
+                        wholesaleService
+                                .findByNameClient(
+                                        "   ",
+                                        pageable
+                                )
+        )
+                .isInstanceOf(
+                        IllegalArgumentException.class
+                )
+                .hasMessageContaining(
+                        "termo da pesquisa"
+                );
+    }
+
+    @Test
+    @DisplayName(
+            "deve buscar pedido por id com sucesso"
+    )
+    void findById() {
+
+        when(
+                repository.findById(orderId)
+        ).thenReturn(
+                Optional.of(order1)
+        );
+
+        WholesaleResponseDTO response =
+                wholesaleService.findById(orderId);
+
+        assertThat(response).isNotNull();
+
+        assertThat(
+                response.id()
+        ).isEqualTo(orderId);
+
+        assertThat(
+                response.nomeCliente()
+        ).isEqualTo("Maria Silva");
+
+        assertThat(
+                response.numeroCliente()
+        ).isEqualTo("85999990001");
+
+        verify(
+                repository
+        ).findById(orderId);
+    }
+
+    @Test
+    @DisplayName(
+            "deve lançar exceção quando pedido não for encontrado por id"
+    )
     void findById_NotFound() {
-        UUID idInexistente = UUID.randomUUID();
 
-        when(repository.findById(idInexistente)).thenReturn(Optional.empty());
+        UUID idInexistente =
+                UUID.randomUUID();
 
-        assertThatThrownBy(() -> wholesaleService.findById(idInexistente))
-                .isInstanceOf(OrderNotFoundException.class)
-                .hasMessageContaining("Pedido não encontrado");
+        when(
+                repository.findById(
+                        idInexistente
+                )
+        ).thenReturn(
+                Optional.empty()
+        );
 
-        verify(repository).findById(idInexistente);
+        assertThatThrownBy(
+                () ->
+                        wholesaleService
+                                .findById(
+                                        idInexistente
+                                )
+        )
+                .isInstanceOf(
+                        OrderNotFoundException.class
+                )
+                .hasMessageContaining(
+                        "Pedido não encontrado"
+                );
+
+        verify(
+                repository
+        ).findById(idInexistente);
     }
+
     @Test
-    @DisplayName("deve deletar pedido e remover foto do S3")
-    void deveDeletarPedidoEFotoDoS3() {
-        when(repository.findById(orderId))
-                .thenReturn(Optional.of(order1));
+    @DisplayName(
+            "deve deletar pedido e remover foto do S3"
+    )
+    void deleteOrder() {
+
+        when(
+                repository.findById(orderId)
+        ).thenReturn(
+                Optional.of(order1)
+        );
 
         wholesaleService.deleteOrder(orderId);
 
-        // verifica que deletou do S3 e do banco
-        verify(s3Service, times(1)).deleteFile(order1.getFotoUrl());
-        verify(repository, times(1)).delete(order1);
+        verify(
+                s3Service
+        ).deleteFile(
+                order1.getFotoUrl()
+        );
+
+        verify(
+                repository
+        ).delete(order1);
+    }
+
+    @Test
+    @DisplayName(
+            "deve lançar exceção ao tentar deletar pedido inexistente"
+    )
+    void deleteOrder_WhenOrderDoesNotExist() {
+
+        when(
+                repository.findById(orderId)
+        ).thenReturn(
+                Optional.empty()
+        );
+
+        assertThatThrownBy(
+                () ->
+                        wholesaleService
+                                .deleteOrder(orderId)
+        )
+                .isInstanceOf(
+                        OrderNotFoundException.class
+                )
+                .hasMessageContaining(
+                        "Pedido não encontrado"
+                );
+
+        verify(
+                repository
+        ).findById(orderId);
     }
 }

@@ -1,20 +1,53 @@
 package com.erick.order_api.repository;
 
 import com.erick.order_api.entity.WholesaleOrder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
-import java.util.List;
-import java.util.Optional;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 public interface WholesaleOrderRepository extends JpaRepository<WholesaleOrder, UUID> {
-    List<WholesaleOrder> findAllByOrderByCreatedAtDesc();
 
-    List<WholesaleOrder> findByNomeClienteContainingIgnoreCase(String nomeCliente);
+    Page<WholesaleOrder> findByNomeClienteContainingIgnoreCase(
+            String nomeCliente,
+            Pageable pageable
+    );
 
-    List<WholesaleOrder> findByNumeroCliente(String numeroCliente);
+    Page<WholesaleOrder> findByNumeroClienteContainingIgnoreCase(
+            String numeroCliente,
+            Pageable pageable
+    );
 
-    List<WholesaleOrder> findByNomeVendedorContainingIgnoreCase(String nomeVendedor);
+    Page<WholesaleOrder> findByNomeVendedorContainingIgnoreCase(
+            String nomeVendedor,
+            Pageable pageable
+    );
 
-    Optional<WholesaleOrder> findById(UUID id);
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            Instant start,
+            Instant end
+    );
+
+    @Query("""
+        SELECT COALESCE(
+            SUM(order.valorTotal),
+            0
+        )
+        FROM WholesaleOrder order
+        """)
+    BigDecimal sumAllValues();
+
+    @Query("""
+        SELECT COUNT(
+            DISTINCT LOWER(
+                TRIM(order.nomeVendedor)
+            )
+        )
+        FROM WholesaleOrder order
+        """)
+    long countDistinctSellers();
 }
