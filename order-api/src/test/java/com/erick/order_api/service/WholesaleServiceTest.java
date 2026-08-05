@@ -24,7 +24,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -100,7 +101,7 @@ class WholesaleServiceTest {
         order1.setFotoUrl(
                 "https://bucket.s3.amazonaws.com/pedidos/foto1.jpg"
         );
-        order1.setCreatedAt(LocalDateTime.now());
+        order1.setCreatedAt(Instant.now().now());
         order1.setUser(userLog);
 
         order2 = new WholesaleOrder();
@@ -116,7 +117,7 @@ class WholesaleServiceTest {
                 "https://bucket.s3.amazonaws.com/pedidos/foto2.jpg"
         );
         order2.setCreatedAt(
-                LocalDateTime.now().minusDays(1)
+                Instant.now().minusMillis(1)
         );
         order2.setUser(userLog);
     }

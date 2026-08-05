@@ -3,9 +3,11 @@ package com.erick.order_api.controller;
 
 import com.erick.order_api.entity.Roles;
 import com.erick.order_api.entity.User;
+import com.erick.order_api.repository.RefreshTokenRepository;
 import com.erick.order_api.repository.UserRepository;
 import com.erick.order_api.repository.WholesaleOrderRepository;
 import com.erick.order_api.service.S3Service;
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -34,7 +38,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-public class WholesaleControllerIntegrationTest {
+class WholesaleControllerIntegrationTest {
+
+    private static final String USERNAME = "vendedor_test";
+    private static final String PASSWORD = "senha123";
+    private static final String FIRST_IMAGE_URL =
+            "https://bucket.s3.amazonaws.com/pedidos/foto1.jpg";
 
     @Autowired
     private MockMvc mockMvc;
@@ -46,71 +55,54 @@ public class WholesaleControllerIntegrationTest {
     private WholesaleOrderRepository orderRepository;
 
     @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @MockitoBean
     private S3Service s3Service;
 
-    private String token;
+    private String accessToken;
     private UUID createdOrderId;
 
     @BeforeEach
     void setUp() throws Exception {
         orderRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
 
         User user = User.builder()
-                .username("vendedor_test")
-                .password(passwordEncoder.encode("senha123"))
+                .username(USERNAME)
+                .password(passwordEncoder.encode(PASSWORD))
                 .roles(Roles.SELLER)
                 .build();
         userRepository.save(user);
 
+        accessToken = authenticate();
 
-        String loginBody = """
-                {"username": "vendedor_test", "password": "senha123"}
-                """;
+        when(s3Service.uploadFile(any())).thenReturn(FIRST_IMAGE_URL);
 
-        MvcResult result = mockMvc.perform(post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(loginBody))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String resposta = result.getResponse().getContentAsString();
-        token = resposta.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
-
-        when(s3Service.uploadFile(any()))
-                .thenReturn("https://bucket.s3.amazonaws.com/pedidos/foto1.jpg");
-
-        MockMultipartFile foto = new MockMultipartFile(
-                "foto", "foto.jpg", "image/jpeg", "conteudo".getBytes()
+        MvcResult result = createOrder(
+                "foto.jpg",
+                "Maria Silva",
+                "João",
+                "Arezzo",
+                "1500.00",
+                "85999990001"
         );
 
-        MvcResult orderResult = mockMvc.perform(multipart("/orders")
-                        .file(foto)
-                        .param("nomeCliente", "Maria Silva")
-                        .param("nomeVendedor", "João")
-                        .param("marca", "Arezzo")
-                        .param("valorTotal", "1500.00")
-                        .param("numeroCliente", "85999990001")
-                        .header("Authorization", "Bearer " + token))
-                        .andExpect(status().isCreated())
-                .andReturn();
-
-        String orderResposta = orderResult.getResponse().getContentAsString();
-        String idStr = orderResposta.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
-        createdOrderId = UUID.fromString(idStr);
+        String responseBody = result.getResponse().getContentAsString();
+        createdOrderId = UUID.fromString(JsonPath.read(responseBody, "$.id"));
     }
+
     @Test
     @DisplayName("deve criar pedido com sucesso retornando 201")
     void deveCriarPedidoComSucesso() throws Exception {
-        when(s3Service.uploadFile(any()))
-                .thenReturn("https://bucket.s3.amazonaws.com/pedidos/foto2.jpg");
+        String imageUrl = "https://bucket.s3.amazonaws.com/pedidos/foto2.jpg";
+        when(s3Service.uploadFile(any())).thenReturn(imageUrl);
 
-        MockMultipartFile foto = new MockMultipartFile(
-                "foto", "foto2.jpg", "image/jpeg", "conteudo".getBytes()
-        );
+        MockMultipartFile foto = image("foto2.jpg");
 
         mockMvc.perform(multipart("/orders")
                         .file(foto)
@@ -119,12 +111,12 @@ public class WholesaleControllerIntegrationTest {
                         .param("marca", "Schutz")
                         .param("valorTotal", "2500.00")
                         .param("numeroCliente", "85999990002")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nomeCliente").value("Ana Maria"))
                 .andExpect(jsonPath("$.nomeVendedor").value("Carlos"))
                 .andExpect(jsonPath("$.numeroCliente").value("85999990002"))
-                .andExpect(jsonPath("$.fotoUrl").value("https://bucket.s3.amazonaws.com/pedidos/foto2.jpg"));
+                .andExpect(jsonPath("$.fotoUrl").value(imageUrl));
     }
 
     @Test
@@ -135,30 +127,34 @@ public class WholesaleControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("deve listar todos os pedidos")
+    @DisplayName("deve listar todos os pedidos de forma paginada")
     void deveListarTodosOsPedidos() throws Exception {
         mockMvc.perform(get("/orders")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].nomeCliente").value("Maria Silva"));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].nomeCliente").value("Maria Silva"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(12))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test
     @DisplayName("deve buscar pedido por id com sucesso")
     void deveBuscarPedidoPorId() throws Exception {
-        mockMvc.perform(get("/orders/" + createdOrderId)
-                        .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/orders/{id}", createdOrderId)
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(createdOrderId.toString()))
                 .andExpect(jsonPath("$.nomeCliente").value("Maria Silva"));
     }
 
     @Test
-    @DisplayName("deve retornar 404 quando pedido não encontrado por id")
+    @DisplayName("deve retornar 404 quando pedido não for encontrado por id")
     void deveRetornar404QuandoNaoEncontrado() throws Exception {
-        mockMvc.perform(get("/orders/" + UUID.randomUUID())
-                        .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/orders/{id}", UUID.randomUUID())
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").exists());
@@ -169,21 +165,23 @@ public class WholesaleControllerIntegrationTest {
     void deveBuscarPorNomeCliente() throws Exception {
         mockMvc.perform(get("/orders/client")
                         .param("nomeCliente", "Maria")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].nomeCliente").value("Maria Silva"));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].nomeCliente").value("Maria Silva"));
     }
 
     @Test
-    @DisplayName("deve retornar lista vazia quando cliente não encontrado")
-    void deveRetornarListaVaziaClienteNaoEncontrado() throws Exception {
+    @DisplayName("deve retornar página vazia quando cliente não for encontrado")
+    void deveRetornarPaginaVaziaClienteNaoEncontrado() throws Exception {
         mockMvc.perform(get("/orders/client")
                         .param("nomeCliente", "Inexistente")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test
@@ -191,9 +189,11 @@ public class WholesaleControllerIntegrationTest {
     void deveBuscarPorNumeroCliente() throws Exception {
         mockMvc.perform(get("/orders/number")
                         .param("numeroCliente", "85999990001")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].numeroCliente").value("85999990001"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].numeroCliente")
+                        .value("85999990001"));
     }
 
     @Test
@@ -201,26 +201,105 @@ public class WholesaleControllerIntegrationTest {
     void deveBuscarPorNomeVendedor() throws Exception {
         mockMvc.perform(get("/orders/seller")
                         .param("nomeVendedor", "João")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].nomeVendedor").value("João"));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].nomeVendedor").value("João"));
+    }
+
+    @Test
+    @DisplayName("deve buscar pedidos pelo vendedor, ano e mês")
+    void deveBuscarPorNomeVendedorAnoEMes() throws Exception {
+        YearMonth currentMonth = YearMonth.now(
+                ZoneId.of("America/Fortaleza")
+        );
+
+        mockMvc.perform(get("/orders/seller")
+                        .param("nomeVendedor", "João")
+                        .param("year", String.valueOf(currentMonth.getYear()))
+                        .param("month", String.valueOf(currentMonth.getMonthValue()))
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].nomeVendedor").value("João"));
+    }
+
+    @Test
+    @DisplayName("deve retornar 400 quando somente o ano do filtro for enviado")
+    void deveRetornar400QuandoFiltroDeMesEstiverIncompleto() throws Exception {
+        mockMvc.perform(get("/orders/seller")
+                        .param("nomeVendedor", "João")
+                        .param("year", "2026")
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Ano e mês precisam ser enviados juntos"));
     }
 
     @Test
     @DisplayName("deve retornar 400 ao criar pedido sem campos obrigatórios")
     void deveRetornar400SemCamposObrigatorios() throws Exception {
-        MockMultipartFile foto = new MockMultipartFile(
-                "foto", "foto.jpg", "image/jpeg", "conteudo".getBytes()
-        );
-
-        // envia sem nomeCliente e valorTotal
         mockMvc.perform(multipart("/orders")
-                        .file(foto)
+                        .file(image("foto.jpg"))
                         .param("nomeVendedor", "João")
                         .param("marca", "Arezzo")
                         .param("numeroCliente", "85999990001")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", bearerToken()))
                 .andExpect(status().isBadRequest());
+    }
+
+    private String authenticate() throws Exception {
+        String loginBody = """
+                {
+                  "username": "vendedor_test",
+                  "password": "senha123"
+                }
+                """;
+
+        MvcResult result = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andReturn();
+
+        return JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.accessToken"
+        );
+    }
+
+    private MvcResult createOrder(
+            String fileName,
+            String nomeCliente,
+            String nomeVendedor,
+            String marca,
+            String valorTotal,
+            String numeroCliente
+    ) throws Exception {
+        return mockMvc.perform(multipart("/orders")
+                        .file(image(fileName))
+                        .param("nomeCliente", nomeCliente)
+                        .param("nomeVendedor", nomeVendedor)
+                        .param("marca", marca)
+                        .param("valorTotal", valorTotal)
+                        .param("numeroCliente", numeroCliente)
+                        .header("Authorization", bearerToken()))
+                .andExpect(status().isCreated())
+                .andReturn();
+    }
+
+    private MockMultipartFile image(String fileName) {
+        return new MockMultipartFile(
+                "foto",
+                fileName,
+                MediaType.IMAGE_JPEG_VALUE,
+                "conteudo".getBytes()
+        );
+    }
+
+    private String bearerToken() {
+        return "Bearer " + accessToken;
     }
 }
