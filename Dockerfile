@@ -3,27 +3,29 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /app
 
-# Primeiro copia apenas o pom para aproveitar o cache das dependências
-COPY pom.xml .
+# O pom.xml está dentro de order-api
+COPY order-api/pom.xml ./pom.xml
 
+# Baixa as dependências e aproveita o cache do Docker
 RUN mvn -B dependency:go-offline
 
-# Depois copia o código
-COPY src ./src
+# O código-fonte também está dentro de order-api
+COPY order-api/src ./src
 
 # Gera o arquivo .jar
 RUN mvn -B clean package -DskipTests
 
 
-# Etapa 2: imagem menor usada para executar a aplicação
+# Etapa 2: executa a aplicação
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Cria usuário sem privilégios de administrador
+# Usuário sem privilégios administrativos
 RUN useradd --system --uid 1001 spring
 
-COPY --from=build /app/target/*.jar app.jar
+# Copia o jar gerado na primeira etapa
+COPY --from=build /app/target/*.jar ./app.jar
 
 USER spring
 
