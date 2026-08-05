@@ -8,6 +8,7 @@ import com.erick.order_api.entity.User;
 import com.erick.order_api.entity.WholesaleOrder;
 import com.erick.order_api.exception.OrderNotFoundException;
 import com.erick.order_api.mapper.WholesaleMapper;
+import com.erick.order_api.repository.UserRepository;
 import com.erick.order_api.repository.WholesaleOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,15 +54,20 @@ class WholesaleServiceTest {
 
     private Pageable pageable;
 
+    private UserRepository userRepository;
+
+    private BusinessDateService businessDateService;
+
     @BeforeEach
     void setUp() {
 
         mapper = new WholesaleMapper();
 
-        wholesaleService = new WholesaleService(
+        wholesaleService = new WholesaleService (
                 repository,
                 s3Service,
-                mapper
+                mapper,
+                businessDateService
         );
 
         pageable = PageRequest.of(
@@ -399,7 +405,7 @@ class WholesaleServiceTest {
                 );
 
         when(
-                repository.findByNumeroClienteContainingIgnoreCase(
+                repository.findByNumeroCliente(
                         "85999990001",
                         pageable
                 )
@@ -427,7 +433,7 @@ class WholesaleServiceTest {
 
         verify(
                 repository
-        ).findByNumeroClienteContainingIgnoreCase(
+        ).findByNumeroCliente(
                 "85999990001",
                 pageable
         );
@@ -447,7 +453,7 @@ class WholesaleServiceTest {
                 );
 
         when(
-                repository.findByNumeroClienteContainingIgnoreCase(
+                repository.findByNumeroCliente(
                         "85999990001",
                         pageable
                 )
@@ -465,7 +471,7 @@ class WholesaleServiceTest {
 
         verify(
                 repository
-        ).findByNumeroClienteContainingIgnoreCase(
+        ).findByNumeroCliente(
                 "85999990001",
                 pageable
         );
@@ -481,7 +487,7 @@ class WholesaleServiceTest {
                 Page.empty(pageable);
 
         when(
-                repository.findByNumeroClienteContainingIgnoreCase(
+                repository.findByNumeroCliente(
                         "00000000000",
                         pageable
                 )
@@ -503,7 +509,7 @@ class WholesaleServiceTest {
 
         verify(
                 repository
-        ).findByNumeroClienteContainingIgnoreCase(
+        ).findByNumeroCliente(
                 "00000000000",
                 pageable
         );
@@ -553,8 +559,10 @@ class WholesaleServiceTest {
         ).thenReturn(ordersPage);
 
         PageResponse<WholesaleResponseDTO> response =
-                wholesaleService.findByNameSeller(
+                wholesaleService.findBySeller(
                         "joão",
+                        isNull(),
+                        isNull(),
                         pageable
                 );
 

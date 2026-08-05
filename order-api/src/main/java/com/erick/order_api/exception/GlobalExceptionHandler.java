@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -37,5 +38,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 new ErrorResponse(500, ex.getMessage(), LocalDateTime.now())
         );
+    }
+    @ExceptionHandler(
+            IllegalArgumentException.class
+    )
+    public ResponseEntity<
+            Map<String, String>
+            > illegalArgument(
+            IllegalArgumentException exception
+    ) {
+        return ResponseEntity
+                .badRequest()
+                .body(
+                        Map.of(
+                                "message",
+                                exception.getMessage()
+                        )
+                );
     }
 }

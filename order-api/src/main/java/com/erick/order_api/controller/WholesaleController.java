@@ -116,8 +116,16 @@ public class WholesaleController {
             description = "Busca parcial, ignorando letras maiúsculas e minúsculas"
     )
     @GetMapping("/seller")
-    public ResponseEntity<PageResponse<WholesaleResponseDTO>> findBySeller(
-            @RequestParam String nomeVendedor,
+    public PageResponse<WholesaleResponseDTO>
+    findBySeller(
+            @RequestParam
+            String nomeVendedor,
+
+            @RequestParam(required = false)
+            Integer year,
+
+            @RequestParam(required = false)
+            Integer month,
 
             @PageableDefault(
                     size = 12,
@@ -126,12 +134,13 @@ public class WholesaleController {
             )
             Pageable pageable
     ) {
-        return ResponseEntity.ok(
-                wholesaleService.findByNameSeller(
+        return wholesaleService
+                .findBySeller(
                         nomeVendedor,
+                        year,
+                        month,
                         pageable
-                )
-        );
+                );
     }
 
     @Operation(summary = "Buscar pedido por ID")

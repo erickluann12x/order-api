@@ -1,5 +1,6 @@
 package com.erick.order_api.service;
 
+import com.erick.order_api.config.MonthRange;
 import com.erick.order_api.dto.PageResponse;
 import com.erick.order_api.dto.WholesaleRequestDTO;
 import com.erick.order_api.dto.WholesaleResponseDTO;
@@ -22,6 +23,7 @@ public class WholesaleService {
     private final WholesaleOrderRepository wholesaleOrderRepository;
     private final S3Service s3Service;
     private final WholesaleMapper mapper;
+    private final BusinessDateService businessDateService;
 
 
     public WholesaleResponseDTO createOrder(WholesaleRequestDTO dto, User userLog){
@@ -77,7 +79,7 @@ public class WholesaleService {
 
         Page<WholesaleResponseDTO> page =
                 wholesaleOrderRepository
-                        .findByNumeroClienteContainingIgnoreCase(
+                        .findByNumeroCliente(
                                 numeroNormalizado,
                                 pageable
                         )
@@ -86,16 +88,45 @@ public class WholesaleService {
         return PageResponse.from(page);
     }
 
-    public PageResponse<WholesaleResponseDTO> findByNameSeller(
+    public PageResponse<WholesaleResponseDTO>
+    findBySeller(
             String nomeVendedor,
+            Integer year,
+            Integer month,
             Pageable pageable
     ) {
-        String nomeNormalizado = normalizeText(nomeVendedor);
+        String normalizedName =
+                normalizeText(nomeVendedor);
+
+        if (year == null && month == null) {
+            Page<WholesaleResponseDTO> page =
+                    wholesaleOrderRepository
+                            .findByNomeVendedorContainingIgnoreCase(
+                                    normalizedName,
+                                    pageable
+                            )
+                            .map(mapper::ToResponse);
+
+            return PageResponse.from(page);
+        }
+
+        validateMonthParameters(
+                year,
+                month
+        );
+
+        MonthRange range =
+                businessDateService.monthRange(
+                        year,
+                        month
+                );
 
         Page<WholesaleResponseDTO> page =
                 wholesaleOrderRepository
-                        .findByNomeVendedorContainingIgnoreCase(
-                                nomeNormalizado,
+                        .findByNomeVendedorContainingIgnoreCaseAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                                normalizedName,
+                                range.start(),
+                                range.end(),
                                 pageable
                         )
                         .map(mapper::ToResponse);
@@ -151,6 +182,28 @@ public class WholesaleService {
         }
 
         return normalized;
+    }
+    private void validateMonthParameters(
+            Integer year,
+            Integer month
+    ) {
+        if (year == null || month == null) {
+            throw new IllegalArgumentException(
+                    "Ano e mês precisam ser enviados juntos"
+            );
+        }
+
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException(
+                    "O mês precisa estar entre 1 e 12"
+            );
+        }
+
+        if (year < 2000 || year > 2100) {
+            throw new IllegalArgumentException(
+                    "O ano informado é inválido"
+            );
+        }
     }
 }
 

@@ -3,6 +3,7 @@ package com.erick.order_api.dto;
 import software.amazon.awssdk.services.s3.endpoints.internal.Value;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -13,6 +14,6 @@ public record WholesaleResponseDTO(UUID id,
                                    BigDecimal valorTotal,
                                    String numeroCliente,
                                    String fotoUrl,
-                                   LocalDateTime createdAt)
+                                   Instant createdAt)
     {
 }
