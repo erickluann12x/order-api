@@ -2,15 +2,18 @@ package com.erick.order_api.controller;
 
 import com.erick.order_api.dto.AccessTokenResponse;
 import com.erick.order_api.dto.LoginRequestDTO;
+import com.erick.order_api.dto.RegisterRequest;
 import com.erick.order_api.entity.User;
 import com.erick.order_api.repository.UserRepository;
 import com.erick.order_api.security.JwtUtil;
+import com.erick.order_api.service.AuthService;
 import com.erick.order_api.service.RefreshCookieService;
 import com.erick.order_api.service.RefreshTokenService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -42,6 +45,7 @@ public class AuthController {
 
     private final RefreshCookieService
             cookieService;
+    private final AuthService authService;
 
     @PostMapping("/login")
     public ResponseEntity<AccessTokenResponse>
@@ -154,6 +158,16 @@ public class AuthController {
                                 .clear()
                                 .toString()
                 )
+                .build();
+    }
+    @PostMapping("/register")
+    public ResponseEntity<Void> register(
+            @Valid @RequestBody RegisterRequest request
+    ) {
+        authService.register(request);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
                 .build();
     }
 }
