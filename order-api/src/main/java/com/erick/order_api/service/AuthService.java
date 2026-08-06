@@ -36,6 +36,7 @@ public class AuthService {
 
         return new LoginResponseDTO(token);
     }
+
     //
     @Transactional
     public void register(RegisterRequest request) {
@@ -46,19 +47,19 @@ public class AuthService {
         if (userRepository.existsByUsername(username)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Esse usuário já está cadastrado"
+                    "Usuário já cadastrado"
             );
         }
 
-        User user = new User();
-
-        user.setUsername(username);
-
-        user.setPassword(
-                passwordEncoder.encode(
-                        request.getPassword()
+        User user = User.builder()
+                .username(username)
+                .password(
+                        passwordEncoder.encode(
+                                request.getPassword()
+                        )
                 )
-        );
+                .roles(Roles.SELLER)
+                .build();
 
         userRepository.save(user);
     }
